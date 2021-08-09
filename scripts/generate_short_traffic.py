@@ -13,7 +13,7 @@ class SenderFlow:
         self.post_delay = post_delay
 
     def get_cmd(self, dst_ip, port, cc_algo):
-        cmd = f"iperf3 -c {dst_ip} -p {port} -C '{cc_algo}' -n {self.flow_size};"
+        cmd = f"iperf3 -c {dst_ip} -p {port} -C '{cc_algo}' -n {self.flow_size}"
         return cmd
 
 
@@ -38,7 +38,7 @@ class PoolQueue:
         cmd = sender_flow.get_cmd(self.dst_ip, port, self.cc_algo)
         print(f"Running {cmd}")
         # f = self.pool.submit(subprocess.run, [f'sleep {sender_flow.pre_delay};echo "running cmd with {cmd}";sleep {sender_flow.post_delay};'])
-        f = self.pool.submit(subprocess.run, [f'sleep {sender_flow.pre_delay};echo "{cmd}";sleep {sender_flow.post_delay};'], shell=True)
+        f = self.pool.submit(subprocess.run, [f'sleep {sender_flow.pre_delay};{cmd};sleep {sender_flow.post_delay};'], shell=True)
         f.add_done_callback(lambda future: self.add_port(port))
     
     def shutdown(self):
