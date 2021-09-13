@@ -5,15 +5,36 @@ import sys
 import time
 import queue
 from concurrent.futures import ThreadPoolExecutor as Pool
+from threading import Lock
 
+
+class LogName:
+    def __init__(self, logfile_prefix, baseval=0):
+        self.logfile_prefix = logfile_prefix
+        self.val = baseval
+        self.lock = Lock()
+
+    def get(self):
+        with self.lock:
+            self.val += 1
+            return f"{self.logfile_prefix}/{self.val}.json"
+            
 class SenderFlow:
-    def __init__(self, flow_size, pre_delay, post_delay):
+    def __init__(self, flow_size, pre_delay, post_delay, log_name_generator, mode='size'):
         self.pre_delay = pre_delay
-        self.flow_size = flow_size
         self.post_delay = post_delay
+        self.log_name_generator = log_name_generator
+        self.mode = mode
+        if mode == "size":
+            self.flow_size = flow_size
+        elif mode == "time":
+            self.flow_time = flow_size
 
     def get_cmd(self, dst_ip, port, cc_algo):
-        cmd = f"iperf3 -c {dst_ip} -p {port} -C '{cc_algo}' -n {self.flow_size}"
+        if self.mode == "size":
+            cmd = f"iperf3 -c {dst_ip} -p {port} -C '{cc_algo}' -n {self.flow_size} -J --logfile {self.log_name_generator.get()}"
+        elif self.mode == "time":
+            cmd = f"iperf3 -c {dst_ip} -p {port} -C '{cc_algo}' -t {self.flow_time} -J --logfile {self.log_name_generator.get()}"
         return cmd
 
 
@@ -45,9 +66,13 @@ class PoolQueue:
         self.pool.shutdown(wait=False)
 
 
+def get_logfile_name(logfile_prefix):
+    c = Counter()
+    return f"{logfile_prefix}/{c.get()}.json"
+
 def main():
-    if len(sys.argv) < 9:
-        print(f"Usage: {__file__} min_port max_port dst_ip cc_algo total_test_time avg_flow_size avg_predelay avg_postdelay")
+    if len(sys.argv) < 10:
+        print(f"Usage: {__file__} min_port max_port dst_ip cc_algo total_test_time avg_flow_size[-time] avg_predelay avg_postdelay logfile_prefix")
         sys.exit(0)
 
     min_port = int(sys.argv[1])
@@ -58,10 +83,21 @@ def main():
     avg_flow_size = int(sys.argv[6])
     avg_predelay = float(sys.argv[7])
     avg_postdelay = float(sys.argv[8])
+    logfile_prefix = sys.argv[9]
 
     port_list = list(range(min_port, max_port + 1))
 
-    sender_flows = [SenderFlow(avg_flow_size, avg_predelay, avg_postdelay)]
+    log_gen = LogName(logfile_prefix)
+
+
+    mode = 'size'
+    if avg_flow_size < 0:
+        mode = 'time'
+
+    # sender_flows = []
+    # for _ in range(2):
+    #     sender_flows.append()
+    sender_flows = [SenderFlow(abs(avg_flow_size), avg_predelay, avg_postdelay, log_gen, mode=mode)]
     
     pool = PoolQueue(port_list, cc_algo, dst_ip)
 
